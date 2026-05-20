@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  siret     String   @unique
+  address   String
+  city      String
+  phone     String
+  email     String
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  missions       Mission[]
+  availabilities Availability[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  phone     String?
+  role      String
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  missionsAsDriver Mission[]        @relation("DriverMissions")
+  availabilities   Availability[]
+  documents        Document[]
+  positions        DriverPosition[]
+  sentRequests     FreightRequest[] @relation("SentRequests")
+  receivedRequests FreightRequest[] @relation("ReceivedRequests")
+  sentMessages     Message[]        @relation("SentMessages")
+  receivedMessages Message[]        @relation("ReceivedMessages")
+  notifications    Notification[]
+  authoredRatings  Rating[]         @relation("AuthoredRatings")
+  receivedRatings  Rating[]         @relation("ReceivedRatings")
+}
+
+model Mission {
+  id        String @id @default(cuid())
+  reference String @unique
+  status    String @default("planned")
+
+  loadingAddress  String
+  loadingCity     String
+  loadingDate     DateTime
+  loadingContact  String?
+
+  deliveryAddress String
+  deliveryCity    String
+  deliveryDate    DateTime
+  deliveryContact String?
+
+  goodsType           String
+  weight              Float?
+  volume              Float?
+  specialInstructions String?
+
+  price     Float?
+  priceUnit String?
+
+  loadingConfirmedAt DateTime?
+  inRouteAt          DateTime?
+  arrivedAt          DateTime?
+  deliveredAt        DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  driverId  String?
+  driver    User?    @relation("DriverMissions", fields: [driverId], references: [id])
+  documents Document[]
+  rating    Rating?
+}
+
+model Availability {
+  id String @id @default(cuid())
+
+  departureRegion String
+  departureCity   String
+
+  arrivalRegion  String?
+  arrivalCity    String?
+  anyDestination Boolean @default(false)
+
+  availableFrom DateTime
+  availableTo   DateTime
+
+  vehicleType String
+  capacity    Float?
+  volume      Float?
+
+  price     Float?
+  priceUnit String?
+
+  status    String   @default("active")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  freightRequests FreightRequest[]
+}
+
+model FreightRequest {
+  id      String @id @default(cuid())
+  message String
+  status  String @default("pending")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  availabilityId String
+  availability   Availability @relation(fields: [availabilityId], references: [id])
+  senderId       String
+  sender         User         @relation("SentRequests", fields: [senderId], references: [id])
+  receiverId     String
+  receiver       User         @relation("ReceivedRequests", fields: [receiverId], references: [id])
+}
+
+model Document {
+  id       String  @id @default(cuid())
+  name     String
+  type     String
+  url      String
+  size     Int?
+  mimeType String?
+  notes    String?
+
+  createdAt DateTime @default(now())
+
+  missionId    String
+  mission      Mission @relation(fields: [missionId], references: [id])
+  uploadedById String
+  uploadedBy   User    @relation(fields: [uploadedById], references: [id])
+}
+
+model DriverPosition {
+  id        String   @id @default(cuid())
+  latitude  Float
+  longitude Float
+  city      String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  senderId    String
+  sender      User   @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+model PriceEstimate {
+  id           String   @id @default(cuid())
+  fromCity     String
+  toCity       String
+  distanceKm   Float
+  suggestedMin Float
+  suggestedMax Float
+  createdAt    DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  data      String?
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  score     Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  missionId  String   @unique
+  mission    Mission  @relation(fields: [missionId], references: [id])
+  authorId   String
+  author     User     @relation("AuthoredRatings", fields: [authorId], references: [id])
+  driverId   String
+  driver     User     @relation("ReceivedRatings", fields: [driverId], references: [id])
+}
