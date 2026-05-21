@@ -1,29 +1,16 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/store";
 
 export default function Home() {
   const router = useRouter();
-  const { user, initFromStorage } = useAuthStore();
-
-  useEffect(() => {
-    initFromStorage();
-  }, [initFromStorage]);
-
-  useEffect(() => {
-    if (user) {
-      router.replace("/dashboard");
-    } else {
-      router.replace("/login");
-    }
-  }, [user, router]);
+  useEffect(() => { router.replace("/dashboard"); }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: "#1e3a5f" }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "#1B3A5C" }}>
       <div className="text-white text-center">
-        <div className="text-4xl font-bold mb-2">🚛 FreightConnect</div>
-        <div style={{ color: "#93c5fd" }}>Chargement...</div>
+        <div className="text-3xl font-bold mb-2" style={{ color: "#C9A84C" }}>✦ Kepler</div>
+        <div style={{ color: "#94A3B8", fontSize: "0.875rem" }}>Chargement…</div>
       </div>
     </div>
   );

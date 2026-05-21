@@ -1,261 +1,408 @@
 "use client";
-import { useEffect, useState } from "react";
-import { AppShell } from "@/components/layout/AppShell";
-import { useAuthStore } from "@/lib/store";
-import { api } from "@/lib/api";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { useState } from "react";
+import AppShell from "@/components/AppShell";
+import MaturityRing from "@/components/MaturityRing";
 import {
-  Truck, Package, CheckCircle, AlertTriangle,
-  TrendingUp, Clock, Users, ArrowRight
+  Phone, MessageSquare, User, X, Home, FileText, Plus, Send, Target,
+  Megaphone, Users, TrendingUp, Calendar, ChevronRight, Clock,
 } from "lucide-react";
+import {
+  CONTACTS, ALERTS, CURRENT_AGENT, CAMPAIGNS,
+  getPriorityEmoji, getPriorityLabel, formatDate, formatPrice,
+  getDaysSinceContact,
+} from "@/lib/data";
+import type { KeplerAlert } from "@/lib/data";
 import Link from "next/link";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-interface Mission {
-  id: string;
-  reference: string;
-  status: string;
-  loadingCity: string;
-  deliveryCity: string;
-  loadingDate: string;
-  deliveryDate: string;
-  goodsType: string;
-  driver?: { firstName: string; lastName: string } | null;
-}
+const ICON_MAP: Record<string, React.ElementType> = {
+  Phone, MessageSquare, User, X, Home, FileText, Send, Target, Megaphone, Users,
+};
 
-interface Driver {
-  id: string;
-  firstName: string;
-  lastName: string;
-  missionsAsDriver: Mission[];
-}
+function AlertCard({ alert, onDismiss }: { alert: KeplerAlert; onDismiss: (id: string) => void }) {
+  const priorityClass: Record<string, string> = {
+    urgent: "alert-card-urgent",
+    high:   "alert-card-high",
+    medium: "alert-card-medium",
+    low:    "alert-card-low",
+  };
 
-export default function DashboardPage() {
-  const { user } = useAuthStore();
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    if (user.role === "driver") return;
-
-    Promise.all([
-      api.get<Mission[]>("/api/missions"),
-      api.get<Driver[]>("/api/drivers"),
-    ]).then(([m, d]) => {
-      setMissions(m);
-      setDrivers(d);
-    }).finally(() => setLoading(false));
-  }, [user]);
-
-  if (!user) return null;
-  if (user.role === "driver") {
-    return (
-      <AppShell title="Mes missions">
-        <div className="text-center py-12">
-          <Link href="/driver" className="btn-primary">Aller à mes missions</Link>
-        </div>
-      </AppShell>
-    );
-  }
-
-  const active = missions.filter((m) => m.status === "in_progress").length;
-  const planned = missions.filter((m) => m.status === "planned").length;
-  const delivered = missions.filter((m) => m.status === "delivered").length;
-  const unassigned = missions.filter((m) => m.status === "planned" && !m.driver).length;
-
-  const activeDrivers = drivers.filter((d) => d.missionsAsDriver.some((m) => m.status === "in_progress")).length;
-  const idleDrivers = drivers.filter((d) => d.missionsAsDriver.length === 0 || d.missionsAsDriver.every((m) => m.status === "delivered" || m.status === "cancelled")).length;
-
-  const recentMissions = missions.slice(0, 6);
-
-  // Chart data — missions by status
-  const chartData = [
-    { name: "Planifiées", count: planned, fill: "#3b82f6" },
-    { name: "En cours", count: active, fill: "#f59e0b" },
-    { name: "Livrées", count: delivered, fill: "#10b981" },
-    { name: "Annulées", count: missions.filter((m) => m.status === "cancelled").length, fill: "#ef4444" },
-  ];
-
-  const statusLabel: Record<string, string> = {
-    planned: "Planifiée",
-    in_progress: "En cours",
-    delivered: "Livrée",
-    cancelled: "Annulée",
+  const dotColor: Record<string, string> = {
+    urgent: "#EF4444",
+    high:   "#F59E0B",
+    medium: "#F59E0B",
+    low:    "#2D9B6F",
   };
 
   return (
-    <AppShell title="Tableau de bord">
-      <div className="space-y-6">
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard
-            icon={<Truck className="w-6 h-6 text-white" />}
-            label="Camions actifs"
-            value={loading ? "…" : String(activeDrivers)}
-            sub={`${idleDrivers} disponibles`}
-            color="#f97316"
-          />
-          <KpiCard
-            icon={<Package className="w-6 h-6 text-white" />}
-            label="Missions en cours"
-            value={loading ? "…" : String(active)}
-            sub={`${planned} planifiées`}
-            color="#1e3a5f"
-          />
-          <KpiCard
-            icon={<CheckCircle className="w-6 h-6 text-white" />}
-            label="Livraisons"
-            value={loading ? "…" : String(delivered)}
-            sub="ce mois"
-            color="#10b981"
-          />
-          <KpiCard
-            icon={<AlertTriangle className="w-6 h-6 text-white" />}
-            label="Sans chauffeur"
-            value={loading ? "…" : String(unassigned)}
-            sub="missions non assignées"
-            color={unassigned > 0 ? "#ef4444" : "#10b981"}
+    <div
+      className={`kepler-card rounded-xl p-4 transition-all ${priorityClass[alert.priority]} ${!alert.read ? "" : "opacity-70"}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex flex-col items-center gap-1 pt-0.5 flex-shrink-0">
+          <div
+            className="rounded-full"
+            style={{ width: 8, height: 8, background: dotColor[alert.priority], flexShrink: 0 }}
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chart */}
-          <div className="card lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-slate-800">Répartition des missions</h2>
-              <TrendingUp className="w-4 h-4 text-slate-400" />
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <rect key={index} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+            <span
+              className="text-xs font-bold tracking-wider"
+              style={{ color: dotColor[alert.priority] }}
+            >
+              {getPriorityEmoji(alert.priority)} {getPriorityLabel(alert.priority)}
+            </span>
+            {alert.contactName && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ background: "rgba(27,58,92,0.08)", color: "#1B3A5C" }}
+              >
+                {alert.contactName}
+              </span>
+            )}
+            <span className="text-xs ml-auto flex-shrink-0" style={{ color: "#94A3B8" }}>
+              {formatDate(alert.createdAt)}
+            </span>
           </div>
 
-          {/* Alerts */}
-          <div className="card">
-            <h2 className="font-bold text-slate-800 mb-4">Alertes</h2>
-            <div className="space-y-3">
-              {unassigned > 0 && (
-                <Alert
-                  icon={<AlertTriangle className="w-4 h-4" />}
-                  text={`${unassigned} mission${unassigned > 1 ? "s" : ""} sans chauffeur`}
-                  type="warning"
-                />
-              )}
-              {idleDrivers > 0 && (
-                <Alert
-                  icon={<Users className="w-4 h-4" />}
-                  text={`${idleDrivers} chauffeur${idleDrivers > 1 ? "s" : ""} sans mission`}
-                  type="info"
-                />
-              )}
-              {unassigned === 0 && idleDrivers === 0 && (
-                <Alert
-                  icon={<CheckCircle className="w-4 h-4" />}
-                  text="Tout est en ordre !"
-                  type="success"
-                />
-              )}
+          <div className="font-semibold text-sm mt-1 mb-1" style={{ color: "#1A202C" }}>
+            {alert.message}
+          </div>
+          {alert.subMessage && (
+            <div className="text-xs mb-3" style={{ color: "#64748B", lineHeight: 1.5 }}>
+              {alert.subMessage}
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Recent missions */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-slate-800">Missions récentes</h2>
-            <Link href="/missions" className="btn-ghost text-sm">
-              Voir tout <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          {loading ? (
-            <div className="text-slate-400 text-sm py-4 text-center">Chargement...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left py-2 px-3 text-slate-500 font-semibold text-xs uppercase">Réf.</th>
-                    <th className="text-left py-2 px-3 text-slate-500 font-semibold text-xs uppercase">Trajet</th>
-                    <th className="text-left py-2 px-3 text-slate-500 font-semibold text-xs uppercase">Date</th>
-                    <th className="text-left py-2 px-3 text-slate-500 font-semibold text-xs uppercase">Chauffeur</th>
-                    <th className="text-left py-2 px-3 text-slate-500 font-semibold text-xs uppercase">Statut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentMissions.map((m) => (
-                    <tr key={m.id} className="table-row border-b border-slate-50">
-                      <td className="py-2 px-3 font-mono font-semibold text-slate-700">{m.reference}</td>
-                      <td className="py-2 px-3 text-slate-700">
-                        {m.loadingCity} → {m.deliveryCity}
-                      </td>
-                      <td className="py-2 px-3 text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {format(new Date(m.loadingDate), "dd/MM", { locale: fr })}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-slate-600">
-                        {m.driver ? `${m.driver.firstName} ${m.driver.lastName}` : <span className="text-orange-400 font-medium">Non assigné</span>}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`badge badge-${m.status}`}>{statusLabel[m.status]}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {alert.actions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {alert.actions.map((action) => {
+                const Icon = ICON_MAP[action.icon] || User;
+                return (
+                  <button key={action.label} className="btn-ghost btn-sm flex items-center gap-1.5">
+                    <Icon size={12} />
+                    {action.label}
+                  </button>
+                );
+              })}
+              <button
+                className="btn-icon ml-auto"
+                onClick={() => onDismiss(alert.id)}
+                title="Ignorer"
+              >
+                <X size={13} />
+              </button>
             </div>
           )}
         </div>
       </div>
-    </AppShell>
-  );
-}
-
-function KpiCard({ icon, label, value, sub, color }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-  color: string;
-}) {
-  return (
-    <div className="card flex items-start gap-4">
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: color }}>
-        {icon}
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-slate-800">{value}</div>
-        <div className="text-sm font-semibold text-slate-600">{label}</div>
-        <div className="text-xs text-slate-400">{sub}</div>
-      </div>
     </div>
   );
 }
 
-function Alert({ icon, text, type }: { icon: React.ReactNode; text: string; type: "warning" | "info" | "success" }) {
-  const colors = {
-    warning: "bg-amber-50 text-amber-700 border-amber-200",
-    info: "bg-blue-50 text-blue-700 border-blue-200",
-    success: "bg-green-50 text-green-700 border-green-200",
+const TODAY_FOLLOWUPS = [
+  { name: "Martin Dupont",  time: "10h00", type: "Appel" },
+  { name: "Sylvie Blanchard", time: "14h30", type: "Visite" },
+  { name: "Nathalie Girard", time: "16h00", type: "RDV estimation" },
+];
+
+const TODAY_DAYS = ["L", "M", "M", "J", "V", "S", "D"];
+const CALENDAR_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+export default function DashboardPage() {
+  const hotLeads = CONTACTS.filter((c) => c.status === "hot" || c.maturityScore >= 70);
+  const [alerts, setAlerts] = useState(ALERTS);
+  const unreadCount = alerts.filter((a) => !a.read).length;
+
+  const topContacts = [...CONTACTS]
+    .filter((c) => c.status !== "converted")
+    .sort((a, b) => b.maturityScore - a.maturityScore)
+    .slice(0, 5);
+
+  const kpis = [
+    {
+      label: "Contacts actifs",
+      value: "347",
+      sub: "+12 ce mois",
+      color: "#1B3A5C",
+      bg: "#EFF6FF",
+      icon: Users,
+    },
+    {
+      label: "Score moyen base",
+      value: "34/100",
+      sub: "+4 pts vs mois dernier",
+      color: "#C9A84C",
+      bg: "#FFFBEB",
+      icon: TrendingUp,
+    },
+    {
+      label: "Messages envoyés",
+      value: "128",
+      sub: "Ce mois — taux 68%",
+      color: "#2D9B6F",
+      bg: "#F0FDF4",
+      icon: MessageSquare,
+    },
+    {
+      label: "Deals en cours",
+      value: "7",
+      sub: "€ 84k estimé",
+      color: "#EF4444",
+      bg: "#FEF2F2",
+      icon: Home,
+    },
+  ];
+
+  const dismissAlert = (id: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
+
+  const urgentAlerts = alerts.filter((a) => !a.read && a.priority === "urgent");
+  const hotAlerts = alerts.filter((a) => !a.read && a.priority === "high");
+  const otherAlerts = alerts.filter((a) => a.read || (a.priority !== "urgent" && a.priority !== "high"));
+
+  const orderedAlerts = [...urgentAlerts, ...hotAlerts, ...otherAlerts];
+
   return (
-    <div className={`flex items-center gap-2 p-3 rounded-lg border text-sm ${colors[type]}`}>
-      {icon}
-      {text}
-    </div>
+    <AppShell>
+      <div className="px-4 lg:px-8 py-6 max-w-[1400px] mx-auto">
+
+        {/* ── Header greeting ── */}
+        <div className="mb-6 animate-fade-up">
+          <h1 className="text-2xl font-bold mb-1" style={{ color: "#1A202C" }}>
+            Bonjour {CURRENT_AGENT.fullName.split(" ")[0]} 👋
+          </h1>
+          <p style={{ color: "#64748B", fontSize: "0.9375rem" }}>
+            Vous avez{" "}
+            <span className="font-semibold" style={{ color: "#EF4444" }}>
+              {urgentAlerts.length + hotAlerts.length} opportunités chaudes
+            </span>{" "}
+            aujourd&apos;hui — dont {urgentAlerts.length} action{urgentAlerts.length !== 1 ? "s" : ""} urgente{urgentAlerts.length !== 1 ? "s" : ""}.
+          </p>
+        </div>
+
+        {/* ── KPI Row ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {kpis.map((kpi, i) => {
+            const Icon = kpi.icon;
+            return (
+              <div
+                key={kpi.label}
+                className="kepler-card p-4 animate-fade-up"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div
+                    className="flex items-center justify-center rounded-lg"
+                    style={{ width: 36, height: 36, background: kpi.bg }}
+                  >
+                    <Icon size={17} style={{ color: kpi.color }} />
+                  </div>
+                  <ChevronRight size={14} style={{ color: "#CBD5E1" }} />
+                </div>
+                <div className="text-2xl font-bold mb-0.5" style={{ color: "#1A202C" }}>{kpi.value}</div>
+                <div className="text-xs font-semibold mb-0.5" style={{ color: "#64748B" }}>{kpi.label}</div>
+                <div className="text-xs" style={{ color: kpi.color }}>{kpi.sub}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Main 2-column layout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+
+          {/* Left — Alert feed */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-lg font-bold" style={{ color: "#1A202C" }}>Alertes &amp; opportunités</h2>
+                {unreadCount > 0 && (
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: "#EF4444", color: "white" }}
+                  >
+                    {unreadCount} nouvelles
+                  </span>
+                )}
+              </div>
+              <Link href="/contacts" className="text-xs font-semibold" style={{ color: "#C9A84C" }}>
+                Tout voir →
+              </Link>
+            </div>
+
+            <div className="space-y-3">
+              {orderedAlerts.map((alert, i) => (
+                <div key={alert.id} className="animate-fade-up" style={{ animationDelay: `${i * 50}ms` }}>
+                  <AlertCard alert={alert} onDismiss={dismissAlert} />
+                </div>
+              ))}
+              {orderedAlerts.length === 0 && (
+                <div
+                  className="kepler-card p-8 text-center"
+                  style={{ color: "#94A3B8" }}
+                >
+                  <div className="text-3xl mb-2">✅</div>
+                  <div className="font-semibold">Toutes les alertes traitées</div>
+                  <div className="text-sm">Revenez demain pour de nouvelles opportunités.</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right panel */}
+          <div className="space-y-4">
+
+            {/* Today's calendar */}
+            <div className="kepler-card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm" style={{ color: "#1A202C" }}>
+                  📅 Aujourd&apos;hui — 21 mai 2026
+                </h3>
+                <button className="btn-ghost btn-sm">Voir agenda</button>
+              </div>
+
+              {/* Day grid */}
+              <div className="grid grid-cols-7 gap-0.5 mb-3">
+                {TODAY_DAYS.map((d) => (
+                  <div key={d} className="text-center text-xs font-semibold py-1" style={{ color: "#94A3B8" }}>{d}</div>
+                ))}
+                {/* offset for thursday (21st of May 2026 is a thursday) — May starts on Friday */}
+                {[...Array(4)].map((_, i) => <div key={`e${i}`} />)}
+                {CALENDAR_DAYS.map((day) => (
+                  <div
+                    key={day}
+                    className="text-center text-xs py-1 rounded-md cursor-pointer font-medium"
+                    style={{
+                      color: day === 21 ? "white" : "#374151",
+                      background: day === 21 ? "#1B3A5C" : "transparent",
+                      fontWeight: day === 21 ? 700 : undefined,
+                    }}
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                {TODAY_FOLLOWUPS.map((f) => (
+                  <div
+                    key={f.name}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg"
+                    style={{ background: "#F8FAFC" }}
+                  >
+                    <Clock size={13} style={{ color: "#1B3A5C", flexShrink: 0 }} />
+                    <span className="text-xs font-semibold" style={{ color: "#1B3A5C", minWidth: 36 }}>{f.time}</span>
+                    <span className="text-xs truncate font-medium" style={{ color: "#374151" }}>{f.name}</span>
+                    <span
+                      className="ml-auto text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
+                      style={{ background: "#EFF6FF", color: "#1D4ED8" }}
+                    >
+                      {f.type}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top contacts by score */}
+            <div className="kepler-card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm" style={{ color: "#1A202C" }}>
+                  🔥 Top contacts
+                </h3>
+                <Link href="/leads-chauds" className="text-xs font-semibold" style={{ color: "#C9A84C" }}>
+                  Voir tous →
+                </Link>
+              </div>
+              <div className="space-y-2.5">
+                {topContacts.map((contact) => {
+                  const days = getDaysSinceContact(contact.lastInteractionAt);
+                  return (
+                    <div key={contact.id} className="flex items-center gap-3">
+                      <div
+                        className="flex items-center justify-center rounded-full text-white font-bold text-xs flex-shrink-0"
+                        style={{ width: 32, height: 32, background: contact.avatarColor }}
+                      >
+                        {contact.initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate" style={{ color: "#1A202C" }}>{contact.fullName}</div>
+                        <div
+                          className="text-xs"
+                          style={{ color: days > 14 ? "#EF4444" : "#94A3B8" }}
+                        >
+                          {days === 0 ? "Aujourd'hui" : `Il y a ${days}j`}
+                        </div>
+                      </div>
+                      <MaturityRing score={contact.maturityScore} size={38} strokeWidth={4} showLabel />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Quick actions */}
+            <div className="kepler-card p-4">
+              <h3 className="font-bold text-sm mb-3" style={{ color: "#1A202C" }}>Actions rapides</h3>
+              <div className="space-y-2">
+                {[
+                  { icon: Plus,     label: "Ajouter un contact",     color: "#1B3A5C", href: "/contacts" },
+                  { icon: Home,     label: "Rentrer un bien",         color: "#2D9B6F", href: "/biens" },
+                  { icon: FileText, label: "Générer une estimation",  color: "#C9A84C", href: "/estimations" },
+                  { icon: Megaphone,label: "Lancer une campagne",     color: "#6366F1", href: "/campagnes" },
+                ].map(({ icon: Icon, label, color, href }) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors hover:opacity-80"
+                    style={{ background: "#F8FAFC", border: "1px solid #E2E8F0" }}
+                  >
+                    <div
+                      className="flex items-center justify-center rounded-lg flex-shrink-0"
+                      style={{ width: 30, height: 30, background: `${color}18` }}
+                    >
+                      <Icon size={14} style={{ color }} />
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: "#374151" }}>{label}</span>
+                    <ChevronRight size={13} className="ml-auto" style={{ color: "#CBD5E1" }} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Campaign snapshot */}
+            <div className="kepler-card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm" style={{ color: "#1A202C" }}>📢 Dernières campagnes</h3>
+                <Link href="/campagnes" className="text-xs font-semibold" style={{ color: "#C9A84C" }}>Tout voir →</Link>
+              </div>
+              {CAMPAIGNS.filter((c) => c.status === "sent").map((camp) => (
+                <div key={camp.id} className="mb-3 last:mb-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold truncate" style={{ color: "#374151" }}>{camp.name}</span>
+                    <span className="text-xs" style={{ color: "#2D9B6F" }}>✓ Envoyée</span>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-xs" style={{ color: "#94A3B8" }}>
+                      <strong style={{ color: "#1A202C" }}>{camp.openedCount}</strong>/{camp.sentCount} ouverts
+                    </span>
+                    <span className="text-xs" style={{ color: "#94A3B8" }}>
+                      <strong style={{ color: "#C9A84C" }}>{camp.clickedCount}</strong> clics
+                    </span>
+                    {(camp.dealsCount ?? 0) > 0 && (
+                      <span className="text-xs font-semibold" style={{ color: "#2D9B6F" }}>
+                        {camp.dealsCount} deal{(camp.dealsCount ?? 0) > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </AppShell>
   );
 }
